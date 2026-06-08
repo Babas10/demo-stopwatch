@@ -1,0 +1,82 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-config
+  labels:
+    app: {{ .Release.Name }}
+data:
+  index.html: |
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <title>{{ .Values.config.appTitle }}</title>
+      <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', sans-serif; background: #0f172a; color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; gap: 28px; }
+        h1 { font-size: 1.6rem; color: #94a3b8; letter-spacing: 0.05em; }
+        .target-label { font-size: 0.95rem; color: #475569; letter-spacing: 0.08em; text-transform: uppercase; }
+        .display { font-size: 6rem; font-variant-numeric: tabular-nums; font-weight: 700; color: {{ .Values.config.accentColor }}; text-shadow: 0 0 40px {{ .Values.config.accentColor }}44; min-width: 320px; text-align: center; transition: color 0.15s; }
+        .display.win  { color: #22c55e; text-shadow: 0 0 40px #22c55e66; }
+        .display.lose { color: #ef4444; text-shadow: 0 0 40px #ef444466; }
+        .btn { padding: 16px 52px; font-size: 1.2rem; font-weight: 600; border: none; border-radius: 50px; cursor: pointer; transition: transform 0.1s; letter-spacing: 0.06em; }
+        .btn:active { transform: scale(0.96); }
+        .btn-start { background: {{ .Values.config.accentColor }}; color: white; }
+        .btn-stop  { background: #ef4444; color: white; }
+        .result { font-size: 1.05rem; min-height: 1.4em; text-align: center; color: #94a3b8; }
+        .result.win  { color: #22c55e; }
+        .result.lose { color: #ef4444; }
+        .hint { font-size: 0.75rem; color: #334155; }
+        .best { font-size: 0.82rem; color: #334155; }
+      </style>
+    </head>
+    <body>
+      <h1>{{ .Values.config.appTitle }}</h1>
+      <p class="target-label">Target: {{ .Values.config.targetTime }}s — stop as close as you can</p>
+      <div class="display" id="display">0.000</div>
+      <button class="btn btn-start" id="main-btn" onclick="handleBtn()">START</button>
+      <div class="result" id="result"></div>
+      <p class="hint">Win zone: +/- {{ .Values.config.winTolerance }}s &nbsp;|&nbsp; Space bar works too</p>
+      <div class="best" id="best"></div>
+      <script>
+        const TARGET    = {{ .Values.config.targetTime }};
+        const TOLERANCE = {{ .Values.config.winTolerance }};
+        const PRECISION = {{ .Values.config.precision }};
+        let startTime = null, rafId = null, running = false;
+        let best = parseFloat(localStorage.getItem('sw_best') || 'Infinity');
+        const display = document.getElementById('display');
+        const result  = document.getElementById('result');
+        const mainBtn = document.getElementById('main-btn');
+        const bestEl  = document.getElementById('best');
+        function renderBest() {
+          if (isFinite(best)) bestEl.textContent = `Best: ${best.toFixed(PRECISION)}s (off by ${Math.abs(best-TARGET).toFixed(PRECISION)}s)`;
+        }
+        renderBest();
+        function handleBtn() { running ? stop() : start(); }
+        function start() {
+          running = true; startTime = performance.now();
+          result.textContent = ''; result.className = 'result'; display.className = 'display';
+          mainBtn.textContent = 'STOP'; mainBtn.className = 'btn btn-stop'; tick();
+        }
+        function tick() {
+          if (!running) return;
+          display.textContent = ((performance.now() - startTime) / 1000).toFixed(PRECISION);
+          rafId = requestAnimationFrame(tick);
+        }
+        function stop() {
+          running = false; cancelAnimationFrame(rafId);
+          const elapsed = (performance.now() - startTime) / 1000;
+          const diff = Math.abs(elapsed - TARGET);
+          const won  = diff <= TOLERANCE;
+          display.textContent = elapsed.toFixed(PRECISION);
+          display.className   = 'display ' + (won ? 'win' : 'lose');
+          result.className    = 'result '  + (won ? 'win' : 'lose');
+          result.textContent  = won ? `You nailed it! Off by ${diff.toFixed(PRECISION)}s` : elapsed < TARGET ? `Too early by ${diff.toFixed(PRECISION)}s` : `Too late by ${diff.toFixed(PRECISION)}s`;
+          if (!isFinite(best) || diff < Math.abs(best - TARGET)) { best = elapsed; localStorage.setItem('sw_best', best); renderBest(); }
+          mainBtn.textContent = 'TRY AGAIN'; mainBtn.className = 'btn btn-start'; startTime = null;
+        }
+        document.addEventListener('keydown', e => { if (e.code === 'Space') { e.preventDefault(); handleBtn(); } });
+      </script>
+    </body>
+    </html>

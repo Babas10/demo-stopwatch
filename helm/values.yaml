@@ -2,7 +2,7 @@ replicaCount: 1
 
 image:
   repository: nginxinc/nginx-unprivileged
-  tag: stable
+  tag: notworking
   pullPolicy: IfNotPresent
 
 # Injected into the HTML via ConfigMap
